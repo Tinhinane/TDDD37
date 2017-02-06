@@ -1,0 +1,867 @@
+Project Report
+==============
+
+Students' name:
+--------------- 
+Tinhinene AIT HAMOUDA (tinai165)
+Yingqi Li (yinli342)
+
+
+Part II:  Implementation of the Database
+========================================
+
+NOTE ON THE MODEL SUBMITTED: No major changes; changes made are described in lines below (in the creation)
+Q2. Creation of tables: 
+
+SELECT 'Creating tables' AS 'Message';
+-- Create tables
+CREATE TABLE Destination(
+    airportCode VARCHAR(3),
+    name VARCHAR(30),
+    country VARCHAR(30),
+    CONSTRAINT pk_destination PRIMARY KEY(airportCode)
+);
+
+CREATE TABLE Year(
+    year INTEGER NOT NULL, 
+    factor DOUBLE NOT NULL, 
+    CONSTRAINT pk_year PRIMARY KEY(year)
+); 
+
+CREATE TABLE Day(
+   day VARCHAR(10),
+   year INTEGER NOT NULL,
+   factor DOUBLE NOT NULL,
+   CONSTRAINT pk_day PRIMARY KEY(day, year),
+   CONSTRAINT fk_day_year FOREIGN KEY(year) REFERENCES Year(year)
+);
+
+CREATE TABLE Route(
+    id INTEGER NOT NULL AUTO_INCREMENT, 
+    routePrice DOUBLE DEFAULT 0, 
+    year INTEGER, 
+    departure VARCHAR(3), 
+    arrival VARCHAR(3),
+ 
+    CONSTRAINT pk_route PRIMARY KEY(id)
+);
+
+CREATE TABLE WeeklyFlight(
+    id INTEGER NOT NULL AUTO_INCREMENT, 
+    departureTime TIME, 
+    route INTEGER, 
+    day VARCHAR(10), 
+    year INTEGER, 
+    
+    CONSTRAINT pk_weeklyflight PRIMARY KEY(id)
+);
+
+-- delete nbr of free seats
+CREATE TABLE Flight(
+    flightNumber INTEGER NOT NULL AUTO_INCREMENT, 
+    week INTEGER NOT NULL, 
+    weeklyFlight INTEGER,
+    
+    CONSTRAINT pk_flight PRIMARY KEY(flightNumber) 
+);
+
+CREATE TABLE Reservation(
+    reservationNbr INTEGER NOT NULL,
+    flight INTEGER NOT NULL, 
+    CONSTRAINT pk_reservation PRIMARY KEY(reservationNbr)
+);
+
+CREATE TABLE Contact(
+    email VARCHAR(30) NOT NULL, 
+    phone BIGINT, 
+    
+    CONSTRAINT pk_contact PRIMARY KEY(email)
+);
+
+-- Use only one name instead of first name and last name
+CREATE TABLE Passenger(
+     passportNbr INTEGER NOT NULL,
+     name VARCHAR(30),
+     contact VARCHAR(30),
+     
+     CONSTRAINT pk_passenger PRIMARY KEY(passportNbr)
+);
+
+CREATE TABLE PassengerReservation(
+    passportNbr INTEGER NOT NULL,
+    reservation INTEGER NOT NULL, 
+    ticketNbr INTEGER, 
+    
+    CONSTRAINT pk_PassengerReservation PRIMARY KEY(passportNbr, reservation)
+);
+
+-- removed price and contact
+-- drop foreign key payment contact
+CREATE TABLE Payment(
+   id INTEGER NOT NULL AUTO_INCREMENT, 
+   cardNumber BIGINT NOT NULL,
+   cardHolder VARCHAR(30),
+    
+   CONSTRAINT pk_payment PRIMARY KEY(id)
+);
+
+CREATE TABLE Booking(
+    ref_reservation INTEGER NOT NULL,
+    payment INTEGER NOT NULL, 
+    
+    CONSTRAINT pk_booking PRIMARY KEY(ref_reservation)
+);
+
+-- Add foreign keys
+SELECT 'Creating foreign keys' AS 'Message';
+ALTER TABLE Route ADD CONSTRAINT fk_route_year FOREIGN KEY(year) REFERENCES Year(year);
+ALTER TABLE Route ADD CONSTRAINT fk_route_departure FOREIGN KEY(departure) REFERENCES Destination(airportCode);
+ALTER TABLE Route ADD CONSTRAINT fk_route_arrival FOREIGN KEY(arrival) REFERENCES Destination(airportCode);
+
+ALTER TABLE WeeklyFlight ADD CONSTRAINT fk_wf_route FOREIGN KEY(route) REFERENCES Route(id);
+ALTER TABLE WeeklyFlight ADD CONSTRAINT fk_wf_day FOREIGN KEY(day) REFERENCES Day(day);
+ALTER TABLE WeeklyFlight ADD CONSTRAINT fk_wf_year FOREIGN KEY(year) REFERENCES Year(year);  
+    
+ALTER TABLE Flight ADD CONSTRAINT fk_flight_wf FOREIGN KEY(weeklyFlight) REFERENCES WeeklyFlight(id);
+
+ALTER TABLE Reservation ADD CONSTRAINT fk_reservation_flight FOREIGN KEY(flight) REFERENCES Flight(flightNumber);  
+
+ALTER TABLE Passenger ADD CONSTRAINT fk_passenger_contact FOREIGN KEY(contact) REFERENCES Contact(email); 
+
+ALTER TABLE PassengerReservation ADD CONSTRAINT fk_RP_reservation FOREIGN KEY(reservation) REFERENCES Reservation(reservationNbr);
+ALTER TABLE PassengerReservation ADD CONSTRAINT fk_RP_passenger FOREIGN KEY(passportNbr) REFERENCES Passenger(passportNbr);
+
+ALTER TABLE Booking ADD CONSTRAINT fk_booking_payment FOREIGN KEY(payment) REFERENCES Payment(id);
+ALTER TABLE Booking ADD CONSTRAINT fk_booking_reservation FOREIGN KEY(ref_reservation) REFERENCES Reservation(reservationNbr);
+
+Q3. Procedures defined to add a flight:
+
+-- addYear(year, factor)
+delimiter //
+CREATE PROCEDURE addYear(IN iyear INTEGER, IN ifactor DOUBLE)
+BEGIN 
+    INSERT INTO Year(year, factor)
+    VALUES (iyear, ifactor);
+END;
+//
+delimiter ;
+
+-- addDay(year, day, factor)
+delimiter //
+CREATE PROCEDURE addDay(IN iyear INTEGER, IN iday VARCHAR(10), IN ifactor DOUBLE)
+BEGIN 
+    INSERT INTO Day(day, year, factor)
+    VALUES (iday, iyear, ifactor);
+END;
+//
+delimiter ;
+
+-- addDestination(airport_code, name, country)
+delimiter //
+CREATE PROCEDURE addDestination(IN iairport_code VARCHAR(3), IN iname VARCHAR(30), IN icountry VARCHAR(30))
+BEGIN 
+    INSERT INTO Destination(airportCode, name, country)
+    VALUES (iairport_code, iname, icountry);
+END;
+//
+delimiter ;
+
+-- addRoute(departure_airport_code, arrival_airport_code, year, routeprice)
+delimiter //
+CREATE PROCEDURE addRoute(IN departure_airport_code VARCHAR(3), IN arrival_airport_code VARCHAR(3), IN year INTEGER, routePrice DOUBLE)
+BEGIN
+    INSERT INTO Route(routePrice, year, departure, arrival)
+    VALUES(routePrice, year, departure_airport_code, arrival_airport_code);
+END;
+//
+delimiter ;
+
+-- addFlight
+delimiter //
+CREATE PROCEDURE addFlight(IN departure_airport_code VARCHAR(3), IN arrival_airport_code VARCHAR(3), IN iyear INTEGER, IN iday VARCHAR(10), IN departure_time TIME)
+BEGIN
+    DECLARE lastWeeklyFlightAdded INTEGER;
+    DECLARE i INT UNSIGNED DEFAULT 1;
+    INSERT INTO WeeklyFlight(departureTime, route, day, year)
+    VALUES ( departure_time, 
+             (SELECT id FROM Route 
+                WHERE year=iyear AND arrival=arrival_airport_code AND             departure=departure_airport_code)
+             , 
+             iday,
+             iyear);
+     SET lastWeeklyFlightAdded := LAST_INSERT_ID();
+     WHILE i < 53 DO
+        INSERT INTO Flight (week, weeklyFlight) VALUES (i, lastWeeklyFlightAdded);
+        SET i := i + 1;
+     END WHILE;
+END;
+//
+delimiter ;
+
+RESULT AFTER TEST SCRIPT
+------------------------
+mysql> select * from flight;
++--------------+------+--------------+
+| flightNumber | week | weeklyFlight |
++--------------+------+--------------+
+|            1 |    1 |            1 |
+|            2 |    2 |            1 |
+|            3 |    3 |            1 |
+|            4 |    4 |            1 |
+|            5 |    5 |            1 |
+|            6 |    6 |            1 |
+|            7 |    7 |            1 |
+|            8 |    8 |            1 |
+|            9 |    9 |            1 |
+|           10 |   10 |            1 |
+|           11 |   11 |            1 |
+|           12 |   12 |            1 |
+|           13 |   13 |            1 |
+|           14 |   14 |            1 |
+|           15 |   15 |            1 |
+|           16 |   16 |            1 |
+|           17 |   17 |            1 |
+|           18 |   18 |            1 |
+|           19 |   19 |            1 |
+|           20 |   20 |            1 |
+|           21 |   21 |            1 |
+|           22 |   22 |            1 |
+|           23 |   23 |            1 |
+|           24 |   24 |            1 |
+|           25 |   25 |            1 |
+|           26 |   26 |            1 |
+|           27 |   27 |            1 |
+|           28 |   28 |            1 |
+|           29 |   29 |            1 |
+|           30 |   30 |            1 |
+|           31 |   31 |            1 |
+|           32 |   32 |            1 |
+|           33 |   33 |            1 |
+|           34 |   34 |            1 |
+|           35 |   35 |            1 |
+|           36 |   36 |            1 |
+|           37 |   37 |            1 |
+|           38 |   38 |            1 |
+|           39 |   39 |            1 |
+|           40 |   40 |            1 |
+|           41 |   41 |            1 |
+|           42 |   42 |            1 |
+|           43 |   43 |            1 |
+|           44 |   44 |            1 |
+|           45 |   45 |            1 |
+|           46 |   46 |            1 |
+|           47 |   47 |            1 |
+|           48 |   48 |            1 |
+|           49 |   49 |            1 |
+|           50 |   50 |            1 |
+|           51 |   51 |            1 |
+|           52 |   52 |            1 |
+|           53 |    1 |            2 |
+|           54 |    2 |            2 |
+|           55 |    3 |            2 |
+|           56 |    4 |            2 |
+|           57 |    5 |            2 |
+|           58 |    6 |            2 |
+|           59 |    7 |            2 |
+|           60 |    8 |            2 |
+|           61 |    9 |            2 |
+|           62 |   10 |            2 |
+|           63 |   11 |            2 |
+|           64 |   12 |            2 |
+|           65 |   13 |            2 |
+|           66 |   14 |            2 |
+|           67 |   15 |            2 |
+|           68 |   16 |            2 |
+|           69 |   17 |            2 |
+|           70 |   18 |            2 |
+|           71 |   19 |            2 |
+|           72 |   20 |            2 |
+|           73 |   21 |            2 |
+|           74 |   22 |            2 |
+|           75 |   23 |            2 |
+|           76 |   24 |            2 |
+|           77 |   25 |            2 |
+|           78 |   26 |            2 |
+|           79 |   27 |            2 |
+|           80 |   28 |            2 |
+|           81 |   29 |            2 |
+|           82 |   30 |            2 |
+|           83 |   31 |            2 |
+|           84 |   32 |            2 |
+|           85 |   33 |            2 |
+|           86 |   34 |            2 |
+|           87 |   35 |            2 |
+|           88 |   36 |            2 |
+|           89 |   37 |            2 |
+|           90 |   38 |            2 |
+|           91 |   39 |            2 |
+|           92 |   40 |            2 |
+|           93 |   41 |            2 |
+|           94 |   42 |            2 |
+|           95 |   43 |            2 |
+|           96 |   44 |            2 |
+|           97 |   45 |            2 |
+|           98 |   46 |            2 |
+|           99 |   47 |            2 |
+|          100 |   48 |            2 |
+|          101 |   49 |            2 |
+|          102 |   50 |            2 |
+|          103 |   51 |            2 |
+|          104 |   52 |            2 |
+|          105 |    1 |            3 |
+|          106 |    2 |            3 |
+|          107 |    3 |            3 |
+|          108 |    4 |            3 |
+|          109 |    5 |            3 |
+|          110 |    6 |            3 |
+|          111 |    7 |            3 |
+|          112 |    8 |            3 |
+|          113 |    9 |            3 |
+|          114 |   10 |            3 |
+|          115 |   11 |            3 |
+|          116 |   12 |            3 |
+|          117 |   13 |            3 |
+|          118 |   14 |            3 |
+|          119 |   15 |            3 |
+|          120 |   16 |            3 |
+|          121 |   17 |            3 |
+|          122 |   18 |            3 |
+|          123 |   19 |            3 |
+|          124 |   20 |            3 |
+|          125 |   21 |            3 |
+|          126 |   22 |            3 |
+|          127 |   23 |            3 |
+|          128 |   24 |            3 |
+|          129 |   25 |            3 |
+|          130 |   26 |            3 |
+|          131 |   27 |            3 |
+|          132 |   28 |            3 |
+|          133 |   29 |            3 |
+|          134 |   30 |            3 |
+|          135 |   31 |            3 |
+|          136 |   32 |            3 |
+|          137 |   33 |            3 |
+|          138 |   34 |            3 |
+|          139 |   35 |            3 |
+|          140 |   36 |            3 |
+|          141 |   37 |            3 |
+|          142 |   38 |            3 |
+|          143 |   39 |            3 |
+|          144 |   40 |            3 |
+|          145 |   41 |            3 |
+|          146 |   42 |            3 |
+|          147 |   43 |            3 |
+|          148 |   44 |            3 |
+|          149 |   45 |            3 |
+|          150 |   46 |            3 |
+|          151 |   47 |            3 |
+|          152 |   48 |            3 |
+|          153 |   49 |            3 |
+|          154 |   50 |            3 |
+|          155 |   51 |            3 |
+|          156 |   52 |            3 |
+|          157 |    1 |            4 |
+|          158 |    2 |            4 |
+|          159 |    3 |            4 |
+|          160 |    4 |            4 |
+|          161 |    5 |            4 |
+|          162 |    6 |            4 |
+|          163 |    7 |            4 |
+|          164 |    8 |            4 |
+|          165 |    9 |            4 |
+|          166 |   10 |            4 |
+|          167 |   11 |            4 |
+|          168 |   12 |            4 |
+|          169 |   13 |            4 |
+|          170 |   14 |            4 |
+|          171 |   15 |            4 |
+|          172 |   16 |            4 |
+|          173 |   17 |            4 |
+|          174 |   18 |            4 |
+|          175 |   19 |            4 |
+|          176 |   20 |            4 |
+|          177 |   21 |            4 |
+|          178 |   22 |            4 |
+|          179 |   23 |            4 |
+|          180 |   24 |            4 |
+|          181 |   25 |            4 |
+|          182 |   26 |            4 |
+|          183 |   27 |            4 |
+|          184 |   28 |            4 |
+|          185 |   29 |            4 |
+|          186 |   30 |            4 |
+|          187 |   31 |            4 |
+|          188 |   32 |            4 |
+|          189 |   33 |            4 |
+|          190 |   34 |            4 |
+|          191 |   35 |            4 |
+|          192 |   36 |            4 |
+|          193 |   37 |            4 |
+|          194 |   38 |            4 |
+|          195 |   39 |            4 |
+|          196 |   40 |            4 |
+|          197 |   41 |            4 |
+|          198 |   42 |            4 |
+|          199 |   43 |            4 |
+|          200 |   44 |            4 |
+|          201 |   45 |            4 |
+|          202 |   46 |            4 |
+|          203 |   47 |            4 |
+|          204 |   48 |            4 |
+|          205 |   49 |            4 |
+|          206 |   50 |            4 |
+|          207 |   51 |            4 |
+|          208 |   52 |            4 |
++--------------+------+--------------+
+208 rows in set (0.00 sec)
+
+Q4. Inserted functions:
+
+-- Calculate Price of a ticket
+delimiter //
+CREATE FUNCTION calculatePrice(flight_number INT) RETURNS DOUBLE
+BEGIN  
+  
+    
+    DECLARE n INTEGER;
+    DECLARE reg_day VARCHAR(10);
+    DECLARE reg_year INTEGER;
+    DECLARE booked_passengers DOUBLE;
+    DECLARE route_price DOUBLE;
+    DECLARE day_factor DOUBLE;
+    DECLARE profit_factor DOUBLE;
+    DECLARE total DOUBLE;
+    
+    SELECT nbrOfFreeSeats INTO n FROM Flight WHERE flightNumber = flight_number;
+    SET booked_passengers := ((40 - n + 1)/4);
+    
+    SELECT factor INTO profit_factor FROM Year WHERE year IN(
+        SELECT DISTINCT year FROM Day WHERE year IN(
+            SELECT year FROM WeeklyFlight WHERE id IN(
+                SELECT weeklyFlight FROM Flight WHERE  flightNumber = flight_number)));
+                
+    SELECT day INTO reg_day FROM WeeklyFlight WHERE id IN
+     (SELECT weeklyFlight FROM Flight WHERE  flightNumber = flight_number);
+    
+    SELECT DISTINCT year INTO reg_year FROM WeeklyFlight WHERE id IN
+     (SELECT weeklyFlight FROM Flight WHERE  flightNumber = flight_number);
+    
+    SELECT factor INTO day_factor FROM Day WHERE day= reg_day AND year=reg_year;
+    
+    SELECT routePrice INTO route_price FROM Route WHERE id IN(
+        SELECT route FROM WeeklyFlight WHERE id IN(
+                    SELECT weeklyFlight FROM Flight WHERE  flightNumber = flight_number));
+    
+    SET total := route_price*booked_passengers*profit_factor*day_factor;             
+    RETURN total;
+END;
+//
+delimiter ;
+
+-- Caculate number of free seats
+DELIMITER //
+CREATE FUNCTION calculateFreeSeats(flight_number INT) RETURNS INTEGER
+BEGIN
+    DECLARE free_seats INTEGER DEFAULT 40;
+    CALL cursor_for_flight_reservation(flight_number, @output);
+    SET free_seats:= free_seats-@output;
+    RETURN free_seats;
+END;
+//
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE find_passengers(IN reservation_number INTEGER, OUT output_number INTEGER)
+BEGIN
+    DECLARE count_passports INTEGER;
+    SELECT COUNT(*) INTO count_passports FROM PassengerReservation WHERE reservation=reservation_number;
+    SET output_number:= count_passports;
+END;
+//
+DELIMITER ;
+
+DELIMITER //
+CREATE PROCEDURE cursor_for_flight_reservation(IN flight_number INTEGER, OUT total_passengers INTEGER)
+BEGIN
+  DECLARE done INT DEFAULT FALSE;
+  DECLARE b INT;
+  DECLARE acc INT DEFAULT 0;
+  DECLARE flight_reservation_cursor CURSOR FOR SELECT reservationNbr FROM Reservation WHERE reservationNbr IN(SELECT ref_reservation FROM Booking) AND flight=flight_number;
+
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+  OPEN flight_reservation_cursor;
+  
+  read_loop: LOOP
+    FETCH flight_reservation_cursor INTO b;
+    IF done THEN
+      LEAVE read_loop;
+    END IF;
+    CALL find_passengers(b, @a);
+    SET acc:= acc + @a;
+  END LOOP;
+  CLOSE flight_reservation_cursor;
+  SET total_passengers:=acc;
+END;
+//
+DELIMITER ;
+
+Q5. A trigger to generate a unique number for each ticket
+
+-- helper procedure for the trigger
+DELIMITER //
+CREATE PROCEDURE update_passengers(IN reservation_number INTEGER, IN passport_number INTEGER)
+BEGIN
+   DECLARE ticket_number INTEGER;
+   SET ticket_number=FLOOR(RAND() * 401) + 100;
+   UPDATE PassengerReservation 
+   SET ticketNbr = ticket_number
+   WHERE reservation=reservation_number AND passportNbr=passport_number;
+END;
+//
+DELIMITER ;
+
+-- helper procedure for the trigger
+DELIMITER //
+CREATE PROCEDURE cursor_for_passports(IN reservation_number INTEGER)
+BEGIN
+  DECLARE done INT DEFAULT FALSE;
+  DECLARE b INT;
+  DECLARE passports_cursor CURSOR FOR SELECT passportNbr FROM PassengerReservation WHERE reservation=reservation_number;
+
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+  OPEN passports_cursor;
+  
+  read_loop: LOOP
+    FETCH passports_cursor INTO b;
+    IF done THEN
+      LEAVE read_loop;
+    END IF;
+    CALL update_passengers(reservation_number, b);
+  END LOOP;
+
+  CLOSE passports_cursor;
+END;
+//
+DELIMITER ;
+
+-- trigger for tickets 
+DELIMITER //
+CREATE TRIGGER ticket_generator AFTER INSERT 
+ON Booking
+FOR EACH ROW 
+BEGIN
+    CALL cursor_for_passports(NEW.ref_reservation);
+END;
+//
+DELIMITER ;
+
+Q6. Inserted procedures to handle reservations
+
+Q6.A) Add a reservation
+-- helpful: findFlight
+DELIMITER //
+CREATE PROCEDURE findFlight(IN departure_airport_code VARCHAR(3), IN arrival_airport_code VARCHAR(3), IN iyear INTEGER, IN iweek INTEGER, IN iday VARCHAR(10), IN departure_time TIME, OUT flight_id INT)
+BEGIN
+    DECLARE id_weekly_flight INTEGER;
+    
+    CALL findRoute(departure_airport_code,arrival_airport_code, iyear,@id);
+    SELECT DISTINCT id INTO id_weekly_flight FROM WeeklyFlight 
+    WHERE day=iday AND year=iyear AND departureTime=departure_time AND route=@id;
+    
+    SELECT flightNumber INTO flight_id FROM Flight 
+    WHERE week=iweek AND weeklyFlight=id_weekly_flight;
+   
+END;
+//
+DELIMITER ;
+
+-- addReservation
+DELIMITER //
+CREATE PROCEDURE addReservation(IN departure_airport_code VARCHAR(3), IN arrival_airport_code VARCHAR(3), IN iyear INTEGER, IN iweek INTEGER, IN iday VARCHAR(10), IN time TIME, IN number_of_passengers INTEGER, OUT output_reservation_nr INTEGER)
+BEGIN
+    
+    DECLARE reservation_number INTEGER;
+    DECLARE verif_seats INTEGER;
+    
+    CALL findFlight(departure_airport_code,arrival_airport_code,iyear,iweek,iday,time,@flight_id);
+    SET reservation_number = FLOOR(RAND() * 401) + 100;
+
+    SELECT calculateFreeSeats(@flight_id) INTO verif_seats;
+
+    IF @flight_id IS NOT NULL THEN
+        IF verif_seats < number_of_passengers THEN
+            SELECT "There are not enough seats available on the chosen flight" AS "Message";
+        ELSE
+            INSERT INTO Reservation(reservationNbr, flight)
+            VALUES(reservation_number, @flight_id);
+            SET output_reservation_nr := reservation_number;
+        END IF;
+    ELSE
+        SELECT "There exist no flight for the given route, day, year and time" AS "Message";
+    END IF;
+END;
+//
+DELIMITER ;
++--------------------------------------------------+
+| Message                                          |
++--------------------------------------------------+
+| Test 1: Adding a reservation, expected OK result |
++--------------------------------------------------+
+1 row in set (0.00 sec)
+Query OK, 1 row affected (0.10 sec)
++------------------------------------------------------------------------------+----------------------+
+| Message                                                                      | Res. number returned |
++------------------------------------------------------------------------------+----------------------+
+| Check that the reservation number is returned properly (any number will do): |                  406 |
++------------------------------------------------------------------------------+----------------------+
+1 row in set (0.00 sec)
+
+And test 2 and 3 have failed as expected.
+
+Q6.B) Add a passenger
+
+-- addPassenger
+DELIMITER //
+CREATE PROCEDURE addPassenger(IN reservation_nr INTEGER, IN passport_number INTEGER, IN iname VARCHAR(30))
+BEGIN
+    DECLARE verif_reservation INTEGER;
+    DECLARE verif_is_booked INTEGER;
+    DECLARE verif_if_contact VARCHAR(30);
+    
+    SELECT ReservationNbr INTO verif_reservation FROM Reservation 
+    WHERE ReservationNbr=reservation_nr;
+    SELECT payment INTO verif_is_booked FROM Booking WHERE ref_reservation=reservation_nr;
+    
+    SELECT DISTINCT contact INTO verif_if_contact FROM Passenger WHERE passportNbr IN(SELECT passportNbr FROM PassengerReservation WHERE reservation=reservation_nr) AND contact IS NOT NULL;
+
+    IF verif_is_booked IS NULL THEN
+        IF verif_reservation IS NOT NULL THEN
+            INSERT INTO Passenger(passportNbr, name, contact)
+            VALUES(passport_number, iname, verif_if_contact);
+            INSERT INTO PassengerReservation(passportNbr, reservation)
+            VALUES(passport_number, reservation_nr);   
+        ELSE
+            SELECT "The given reservation does not exist" AS "Message";
+        END IF;
+    ELSE
+        SELECT "The booking has already been payed and no futher passengers can be added" AS "Message";        
+    END IF;
+END;
+//
+DELIMITER ;
+
++------------------------------------------------+
+| Message                                        |
++------------------------------------------------+
+| Test 4: Adding a passenger. Expected OK result |
++------------------------------------------------+
+1 row in set (0.00 sec)
+Query OK, 1 row affected (0.08 sec)
+
+Q6.C) Add a contact
+
+-- addContact
+DELIMITER //
+CREATE PROCEDURE addContact(IN reservation_nr INTEGER, IN passport_number INTEGER, IN iemail VARCHAR(30), IN iphone BIGINT)
+BEGIN
+    DECLARE verif_reservation INTEGER;
+    DECLARE verif_pass INTEGER;
+        
+    SELECT ReservationNbr INTO verif_reservation FROM Reservation 
+    WHERE ReservationNbr=reservation_nr;
+    
+    SELECT passportNbr INTO verif_pass FROM PassengerReservation 
+    WHERE reservation=reservation_nr AND passportNbr=passport_number;
+    
+        IF verif_pass IS NOT NULL THEN         
+            IF verif_reservation IS NOT NULL THEN        
+                    INSERT INTO Contact(email, phone) VALUES(iemail, iphone)
+                        ON DUPLICATE KEY UPDATE email=iemail;
+                    -- for each!
+                    UPDATE Passenger
+                    SET contact=iemail 
+                    WHERE passportNbr IN(SELECT passportNbr FROM PassengerReservation WHERE reservation=reservation_nr);
+            ELSE
+                SELECT "The given reservation does not exist" AS "Message";
+            END IF;
+        ELSE
+            SELECT "The person is not a passenger of the reservation" AS "Message";
+        END IF;
+  
+END;
+//
+DELIMITER ;
+
++----------------------------------------------+
+| Message                                      |
++----------------------------------------------+
+| Test 6: Adding a contact. Expected OK result |
++----------------------------------------------+
+1 row in set (0.00 sec)
+Query OK, 1 row affected (0.19 sec)
+
+Test 5, 7, 8, 12 have failed as expected.
+
+Q6.D) Add a payment 
+
+-- addPayment
+DELIMITER //
+CREATE PROCEDURE addPayment(IN reservation_nr INTEGER, IN card_holder VARCHAR(30), IN credit_card_number BIGINT)
+BEGIN
+    DECLARE verif_reservation INTEGER;
+    DECLARE verif_contact VARCHAR(30);
+    DECLARE verif_is_payed INTEGER;
+    DECLARE id_payment INTEGER;
+    DECLARE check_free INTEGER;
+    DECLARE count_pay_for INTEGER;
+    DECLARE flight_number INTEGER;
+    
+    SELECT flight INTO flight_number FROM Reservation WHERE reservationNbr=reservation_nr;
+    SELECT calculateFreeSeats(flight_number) INTO check_free;
+    SELECT COUNT(*) INTO count_pay_for FROM PassengerReservation WHERE reservation=reservation_nr;
+    
+    SELECT ReservationNbr INTO verif_reservation FROM Reservation 
+    WHERE ReservationNbr=reservation_nr;
+    
+    SELECT DISTINCT contact INTO verif_contact FROM Passenger WHERE passportNbr IN(
+        SELECT passportNbr FROM PassengerReservation WHERE reservation=reservation_nr);
+
+    SELECT payment INTO verif_is_payed FROM Booking WHERE ref_reservation=reservation_nr;
+
+    IF check_free > count_pay_for THEN  
+        IF verif_is_payed IS NULL THEN
+            IF verif_reservation IS NOT NULL THEN    
+                IF verif_contact IS NOT NULL THEN
+                    INSERT INTO Payment(cardNumber, cardHolder)
+                    VALUES(credit_card_number,card_holder);
+                    
+                    SET id_payment := LAST_INSERT_ID();
+                    INSERT INTO Booking(ref_reservation, payment)
+                    VALUES(reservation_nr, id_payment);
+                ELSE
+                    SELECT "The reservation has no contact yet" as "Message";
+                END IF;
+            ELSE
+                SELECT "The given reservation number does not exist" as "Message";
+            END IF;
+        ELSE
+            SELECT "The booking has already been payed and no futher passengers can be added" as "Message";
+        END IF;
+    ELSE
+        SELECT "There are not enough seats available on the flight anymore, deleting reservation!" AS "Message";
+        DELETE FROM PassengerReservation WHERE reservation=reservation_nr;
+        DELETE FROM Reservation WHERE reservationNbr=reservation_nr;
+        DELETE FROM Passenger WHERE contact=verif_contact;
+        DELETE FROM Contact WHERE email=verif_contact;
+        
+    END IF; 
+END;
+//
+DELIMITER ;
+
++----------------------------------------------+
+| Message                                      |
++----------------------------------------------+
+| Test 9: Making a payment. Expected OK result |
++----------------------------------------------+
+1 row in set (0.00 sec)
+Query OK, 1 row affected (0.11 sec)
+
+> Test 10, 11 have failed as expected.
+> Also, concerning overbooking, there is a way to stop it in the procedure addPayment. Here is the message obtained, when test 11 was run.
++-----------------------------------------------------------------------------------+
+| Message                                                                           |
++-----------------------------------------------------------------------------------+
+| There are not enough seats available on the flight anymore, deleting reservation! |
++-----------------------------------------------------------------------------------+
+1 row in set (0.00 sec)
+Query OK, 1 row affected (0.13 sec)
+
+Q7) Create a view for all flights
+
+-- Create a view
+CREATE VIEW allFlights AS
+    SELECT Route.departure AS 'departure_city_name',
+        Route.arrival AS 'destination_city_name', 
+        WeeklyFlight.departureTime AS 'departure_time',
+        WeeklyFlight.day AS 'departure_day',
+        Flight.week AS 'departure_week',
+        WeeklyFlight.year AS 'departure_year',
+        calculateFreeSeats(Flight.flightNumber) AS 'nr_of_free_seats',
+        calculatePrice(Flight.flightNumber) AS 'current_price_per_seat'
+    FROM Flight, WeeklyFlight, Route
+	WHERE Flight.weeklyFlight= WeeklyFlight.id AND WeeklyFlight.route=Route.id
+
+> A snapshot on what the view looks like
++---------------------+-----------------------+----------------+---------------+----------------+----------------+------------------+------------------------+
+| departure_city_name | destination_city_name | departure_time | departure_day | departure_week | departure_year | nr_of_free_seats | current_price_per_seat |
++---------------------+-----------------------+----------------+---------------+----------------+----------------+------------------+------------------------+
+| MIT                 | HOB                   | 09:00:00       | Monday        |              1 |           2010 |               34 |      8049.999999999999 |
+| MIT                 | HOB                   | 09:00:00       | Monday        |              2 |           2010 |               40 |                   1150 |
+| MIT                 | HOB                   | 09:00:00       | Monday        |              3 |           2010 |               40 |                   1150 |
+| MIT                 | HOB                   | 09:00:00       | Monday        |              4 |           2010 |               40 |                   1150 |
+
+
+Q8) Theory questions
+Q8.a) One could use an encryption function when we store an information we want to secure into the database and then a decryption function at retrieval. 
+
+Q8.b) Give three advantages of using stored procedures in the database (and thereby
+execute them on the server) instead of writing the same functions in the frontend
+of the system (in for example java-script on a web-page)?
+
+The advantages are: 
+> A modular design
+> Faster execution execution time
+> Can be used as a security mechanism
+
+Q9) Transactions 
+
+a) Open two terminals
+b) begin transaction in each terminal
+mysql> begin;
+
+c) add a reservation in one session
+mysql> CALL addReservation("MIT","HOB",2010,1,"Monday","09:00:00",3,@a);
+Query OK, 1 row affected (0,01 sec)
+
+mysql> select * from Reservation;
++----------------+--------+
+| reservationNbr | flight |
++----------------+--------+
+|              0 |     52 |
+|              1 |     52 |
+|            223 |     52 |
+|            283 |     52 |
+|            306 |     52 |
+|            314 |     52 |
+|            350 |     52 |
+|            467 |    104 |
++----------------+--------+
+8 rows in set (0,00 sec)
+
+In the other session, the reservation newly added is not seen.
+mysql> select * from Reservation;
++----------------+--------+
+| reservationNbr | flight |
++----------------+--------+
+|              0 |     52 |
+|              1 |     52 |
+|            223 |     52 |
+|            283 |     52 |
+|            306 |     52 |
+|            314 |     52 |
+|            467 |    104 |
++----------------+--------+
+7 rows in set (0,00 sec)
+
+The reservation newly added is not seen in the other session because of the concept of Isolation, which states that any sessions do not affect each other.
+
+d) If the reservation added in session A is updated in session B. Similarly, the update will not be seen in session A, because of the isolation between A and B. Though, once the transaction is commited, it should be possible to see the update in session A.
+
+Q10)
+a) Yes, overbooking happened.
+b) Yes, theoretically overbooking can happen. But, the procedure of adding a booking and add a reservation both checks if there is indeed enough seats, that's a way to fix it.
+c) It is normally not possible now to have an overbooking since it checked twice in two different tables.
+

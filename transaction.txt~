@@ -1,0 +1,41 @@
+1) Open two terminals
+2) begin transaction in each terminal
+mysql> begin;
+
+3) add a reservation in one session
+mysql> CALL addReservation("MIT","HOB",2010,1,"Monday","09:00:00",3,@a);
+Query OK, 1 row affected (0,01 sec)
+
+mysql> select * from Reservation;
++----------------+--------+
+| reservationNbr | flight |
++----------------+--------+
+|              0 |     52 |
+|              1 |     52 |
+|            223 |     52 |
+|            283 |     52 |
+|            306 |     52 |
+|            314 |     52 |
+|            350 |     52 |
+|            467 |    104 |
++----------------+--------+
+8 rows in set (0,00 sec)
+
+In the other session, the reservation newly added is not seen.
+mysql> select * from Reservation;
++----------------+--------+
+| reservationNbr | flight |
++----------------+--------+
+|              0 |     52 |
+|              1 |     52 |
+|            223 |     52 |
+|            283 |     52 |
+|            306 |     52 |
+|            314 |     52 |
+|            467 |    104 |
++----------------+--------+
+7 rows in set (0,00 sec)
+
+The reservation newly added is not seen in the other session because of the concept of Isolation, which states that any sessions do not affect each other.
+
+4) If the reservation added in session A is updated in session B. Similarly, the update will not be seen in session A, because of the isolation between A and B. Though, once the transaction is commited, it is possible to see the update in session A.

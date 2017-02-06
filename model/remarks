@@ -1,0 +1,13 @@
+* By having the 'Reservation' attribute in the 'Flight' relation, you
+can have only one reservation per flight. It should be possible to have
+multiple reservations on each flight.
+
+* By having the 'PassportNumber' attribute in the 'Reservation'
+relation, you can have only one passenger per reservation. It should be
+possible to have multiple passengers on a reservation.
+
+When you modify your design to address these issues, also make sure that
+it will be possible to add passengers to a reservation _before_ the
+reservation has been paid for, that is, before there are ticket numbers
+for each of the passengers in the reservation.
+

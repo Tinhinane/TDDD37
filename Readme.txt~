@@ -1,8 +1,0 @@
-1) Destination table:
-Stores all airport codes, with their full name, and country where they're situated.
-
-2) Route table: 
-Stores all departure and arrival routes that BryanAir connects, with the route price.
-
-3) WeeklyFlight table:
-
